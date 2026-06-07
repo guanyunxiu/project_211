@@ -11,8 +11,8 @@ def main():
         Qt.HighDpiScaleFactorRoundingPolicy.PassThrough
     )
     app = QApplication(sys.argv)
-    app.setApplicationName("五子棋 - 单机版")
-    app.setOrganizationName("GomokuGame")
+    app.setApplicationName("棋类游戏大厅")
+    app.setOrganizationName("ChessGameHall")
 
     window = MainWindow()
     window.show()

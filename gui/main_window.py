@@ -1,5 +1,5 @@
-from PyQt6.QtCore import Qt, QPoint
-from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QFont, QIcon
+from PyQt6.QtCore import Qt
+from PyQt6.QtGui import QPainter, QPen, QBrush, QColor, QIcon
 from PyQt6.QtWidgets import (
     QMainWindow,
     QWidget,
@@ -9,9 +9,13 @@ from PyQt6.QtWidgets import (
     QLabel,
     QMessageBox,
     QFrame,
+    QStackedWidget,
 )
 
 from game.gomoku import GomokuGame, Player
+from game.xiangqi import XiangqiGame, PieceColor
+from gui.game_selector import GameSelector
+from gui.xiangqi_widget import XiangqiBoardWidget
 
 
 class BoardWidget(QWidget):
@@ -157,18 +161,73 @@ class BoardWidget(QWidget):
         return int(row), int(col)
 
 
-class MainWindow(QMainWindow):
-    def __init__(self):
-        super().__init__()
+class GomokuGamePage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
         self.game = GomokuGame()
         self._init_ui()
 
     def _init_ui(self):
-        self.setWindowTitle("五子棋 - 单机版")
-        self.setStyleSheet("""
-            QMainWindow {
-                background-color: #f5f0e6;
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+
+        title_label = QLabel("⚫ 五 子 棋 ⚪")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("""
+            font-size: 28px;
+            font-weight: bold;
+            color: #4a3728;
+            padding: 10px;
+            background: transparent;
+        """)
+        main_layout.addWidget(title_label)
+
+        self.status_label = QLabel()
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setFrameShape(QFrame.Shape.StyledPanel)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                background-color: #fff8e7;
+                border: 2px solid #d4a574;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #4a3728;
             }
+        """)
+        main_layout.addWidget(self.status_label)
+
+        self.board_widget = BoardWidget(self.game)
+        self.board_widget.setStyleSheet("background-color: #f5f0e6;")
+        main_layout.addWidget(self.board_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
+
+        self.back_btn = QPushButton("🏠 返回大厅")
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d;
+                color: white;
+                border: none;
+                padding: 10px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+            QPushButton:pressed {
+                background-color: #606c6d;
+            }
+        """)
+        button_layout.addWidget(self.back_btn)
+
+        self.reset_btn = QPushButton("🔄 重新开始")
+        self.reset_btn.setStyleSheet("""
             QPushButton {
                 background-color: #8b5a2b;
                 color: white;
@@ -184,62 +243,12 @@ class MainWindow(QMainWindow):
             QPushButton:pressed {
                 background-color: #6b4423;
             }
-            QLabel {
-                font-size: 16px;
-                color: #4a3728;
-            }
         """)
-
-        central_widget = QWidget()
-        self.setCentralWidget(central_widget)
-        main_layout = QVBoxLayout(central_widget)
-        main_layout.setContentsMargins(20, 20, 20, 20)
-        main_layout.setSpacing(15)
-
-        title_label = QLabel("五 子 棋")
-        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        title_label.setStyleSheet("""
-            font-size: 28px;
-            font-weight: bold;
-            color: #4a3728;
-            padding: 10px;
-        """)
-        main_layout.addWidget(title_label)
-
-        self.status_label = QLabel()
-        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
-        self.status_label.setFrameShape(QFrame.Shape.StyledPanel)
-        self.status_label.setStyleSheet("""
-            QLabel {
-                background-color: #fff8e7;
-                border: 2px solid #d4a574;
-                border-radius: 8px;
-                padding: 12px;
-                font-size: 16px;
-                font-weight: bold;
-            }
-        """)
-        main_layout.addWidget(self.status_label)
-
-        self.board_widget = BoardWidget(self.game)
-        self.board_widget.setStyleSheet("background-color: #f5f0e6;")
-        main_layout.addWidget(self.board_widget, alignment=Qt.AlignmentFlag.AlignCenter)
-
-        button_layout = QHBoxLayout()
-        button_layout.setSpacing(20)
-
-        self.reset_btn = QPushButton("🔄 重新开始")
-        self.reset_btn.clicked.connect(self.reset_game)
         button_layout.addWidget(self.reset_btn)
-
-        self.exit_btn = QPushButton("🚪 退出游戏")
-        self.exit_btn.clicked.connect(self.close)
-        button_layout.addWidget(self.exit_btn)
 
         main_layout.addLayout(button_layout)
 
         self.update_status()
-        self.adjustSize()
 
     def update_status(self):
         if self.game.game_over:
@@ -257,13 +266,13 @@ class MainWindow(QMainWindow):
                 winner = self.game.get_player_name(self.game.winner)
                 QMessageBox.information(
                     self,
-                    "游戏结束",
+                    "五子棋 - 游戏结束",
                     f"🎉 恭喜！{winner} 获胜！\n\n点击确定后可以重新开始游戏。",
                 )
             else:
                 QMessageBox.information(
                     self,
-                    "游戏结束",
+                    "五子棋 - 游戏结束",
                     "🤝 平局！棋盘已满。\n\n点击确定后可以重新开始游戏。",
                 )
 
@@ -279,3 +288,200 @@ class MainWindow(QMainWindow):
             self.game.reset()
             self.board_widget.update()
             self.update_status()
+
+
+class XiangqiGamePage(QWidget):
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.game = XiangqiGame()
+        self._init_ui()
+
+    def _init_ui(self):
+        main_layout = QVBoxLayout(self)
+        main_layout.setContentsMargins(20, 20, 20, 20)
+        main_layout.setSpacing(15)
+
+        title_label = QLabel("🏯 中 国 象 棋 🏯")
+        title_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        title_label.setStyleSheet("""
+            font-size: 28px;
+            font-weight: bold;
+            color: #4a3728;
+            padding: 10px;
+            background: transparent;
+        """)
+        main_layout.addWidget(title_label)
+
+        self.status_label = QLabel()
+        self.status_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        self.status_label.setFrameShape(QFrame.Shape.StyledPanel)
+        self.status_label.setStyleSheet("""
+            QLabel {
+                background-color: #fff8e7;
+                border: 2px solid #d4a574;
+                border-radius: 8px;
+                padding: 12px;
+                font-size: 16px;
+                font-weight: bold;
+                color: #4a3728;
+            }
+        """)
+        main_layout.addWidget(self.status_label)
+
+        self.board_widget = XiangqiBoardWidget(self.game)
+        self.board_widget.setStyleSheet("background-color: #f5f0e6;")
+        main_layout.addWidget(self.board_widget, alignment=Qt.AlignmentFlag.AlignCenter)
+
+        button_layout = QHBoxLayout()
+        button_layout.setSpacing(20)
+
+        self.back_btn = QPushButton("🏠 返回大厅")
+        self.back_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #7f8c8d;
+                color: white;
+                border: none;
+                padding: 10px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #95a5a6;
+            }
+            QPushButton:pressed {
+                background-color: #606c6d;
+            }
+        """)
+        button_layout.addWidget(self.back_btn)
+
+        self.reset_btn = QPushButton("🔄 重新开始")
+        self.reset_btn.setStyleSheet("""
+            QPushButton {
+                background-color: #c0392b;
+                color: white;
+                border: none;
+                padding: 10px 24px;
+                border-radius: 6px;
+                font-size: 14px;
+                font-weight: bold;
+            }
+            QPushButton:hover {
+                background-color: #e74c3c;
+            }
+            QPushButton:pressed {
+                background-color: #a93226;
+            }
+        """)
+        button_layout.addWidget(self.reset_btn)
+
+        main_layout.addLayout(button_layout)
+
+        self.update_status()
+
+    def update_status(self):
+        if self.game.game_over:
+            if self.game.winner is not None:
+                text = f"🎉 游戏结束 - {self.game.get_player_name(self.game.winner)} 获胜！"
+            else:
+                text = "🤝 游戏结束 - 平局！"
+        else:
+            text = f"当前回合：{self.game.get_current_player_name()}"
+        self.status_label.setText(text)
+
+    def check_game_end(self):
+        if self.game.game_over:
+            if self.game.winner is not None:
+                winner = self.game.get_player_name(self.game.winner)
+                QMessageBox.information(
+                    self,
+                    "中国象棋 - 游戏结束",
+                    f"🎉 恭喜！{winner} 获胜！\n\n点击确定后可以重新开始游戏。",
+                )
+            else:
+                QMessageBox.information(
+                    self,
+                    "中国象棋 - 游戏结束",
+                    "🤝 平局！\n\n点击确定后可以重新开始游戏。",
+                )
+
+    def reset_game(self):
+        reply = QMessageBox.question(
+            self,
+            "确认重置",
+            "确定要重新开始游戏吗？\n当前棋局将会被清空。",
+            QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No,
+            QMessageBox.StandardButton.Yes,
+        )
+        if reply == QMessageBox.StandardButton.Yes:
+            self.game.reset()
+            self.board_widget.update()
+            self.update_status()
+
+
+class MainWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self._init_ui()
+
+    def _init_ui(self):
+        self.setWindowTitle("棋类游戏大厅 - 五子棋 & 中国象棋")
+        self.setStyleSheet("""
+            QMainWindow {
+                background-color: #f5f0e6;
+            }
+            QWidget {
+                background-color: #f5f0e6;
+            }
+        """)
+
+        self.stacked_widget = QStackedWidget()
+        self.setCentralWidget(self.stacked_widget)
+
+        self.game_selector = GameSelector()
+        self.gomoku_page = GomokuGamePage()
+        self.xiangqi_page = XiangqiGamePage()
+
+        self.stacked_widget.addWidget(self.game_selector)
+        self.stacked_widget.addWidget(self.gomoku_page)
+        self.stacked_widget.addWidget(self.xiangqi_page)
+
+        self.game_selector.game_selected.connect(self._on_game_selected)
+        self.gomoku_page.back_btn.clicked.connect(self._back_to_selector)
+        self.gomoku_page.reset_btn.clicked.connect(self.gomoku_page.reset_game)
+        self.xiangqi_page.back_btn.clicked.connect(self._back_to_selector)
+        self.xiangqi_page.reset_btn.clicked.connect(self.xiangqi_page.reset_game)
+
+        self.stacked_widget.setCurrentIndex(0)
+        self.adjustSize()
+
+    def _on_game_selected(self, game_index: int):
+        if game_index == 0:
+            self.gomoku_page.game.reset()
+            self.gomoku_page.board_widget.update()
+            self.gomoku_page.update_status()
+            self.stacked_widget.setCurrentIndex(1)
+        elif game_index == 1:
+            self.xiangqi_page.game.reset()
+            self.xiangqi_page.board_widget.update()
+            self.xiangqi_page.update_status()
+            self.stacked_widget.setCurrentIndex(2)
+        self.adjustSize()
+
+    def _back_to_selector(self):
+        self.stacked_widget.setCurrentIndex(0)
+        self.adjustSize()
+
+    def update_status(self):
+        current_index = self.stacked_widget.currentIndex()
+        if current_index == 1:
+            self.gomoku_page.update_status()
+        elif current_index == 2:
+            self.xiangqi_page.update_status()
+
+    def check_game_end(self):
+        current_index = self.stacked_widget.currentIndex()
+        if current_index == 1:
+            self.gomoku_page.check_game_end()
+        elif current_index == 2:
+            self.xiangqi_page.check_game_end()
