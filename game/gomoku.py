@@ -1,5 +1,7 @@
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
+
+from utils.record_manager import RecordManager
 
 
 class Player(Enum):
@@ -18,6 +20,8 @@ class GomokuGame:
         self.winner: Optional[Player] = None
         self.game_over: bool = False
         self.move_history: List[Tuple[int, int]] = []
+        self.undo_stack: List[Dict[str, Any]] = []
+        self.record_manager = RecordManager()
         self._init_board()
 
     def _init_board(self) -> None:
@@ -32,6 +36,33 @@ class GomokuGame:
         self.winner = None
         self.game_over = False
         self.move_history.clear()
+        self.undo_stack.clear()
+
+    def can_undo(self) -> bool:
+        return len(self.move_history) > 0
+
+    def undo(self) -> bool:
+        if not self.can_undo():
+            return False
+
+        if self.undo_stack:
+            state = self.undo_stack.pop()
+            self.board = state["board"]
+            self.current_player = state["current_player"]
+            self.winner = state["winner"]
+            self.game_over = state["game_over"]
+            self.move_history.pop()
+            return True
+        return False
+
+    def _save_state(self) -> None:
+        state = {
+            "board": [row[:] for row in self.board],
+            "current_player": self.current_player,
+            "winner": self.winner,
+            "game_over": self.game_over,
+        }
+        self.undo_stack.append(state)
 
     def is_valid_position(self, row: int, col: int) -> bool:
         return 0 <= row < self.BOARD_SIZE and 0 <= col < self.BOARD_SIZE
@@ -46,6 +77,8 @@ class GomokuGame:
             return False
         if self.is_occupied(row, col):
             return False
+
+        self._save_state()
 
         self.board[row][col] = self.current_player
         self.move_history.append((row, col))
@@ -104,3 +137,19 @@ class GomokuGame:
         elif player == Player.WHITE:
             return "白棋"
         return "空"
+
+    def save_record(self, format: str = "json") -> Optional[str]:
+        if not self.move_history:
+            return None
+
+        winner_name = "平局"
+        if self.winner:
+            winner_name = self.get_player_name(self.winner)
+
+        return self.record_manager.save_gomoku_record(
+            self.move_history,
+            winner_name,
+            self.get_player_name(Player.BLACK),
+            self.get_player_name(Player.WHITE),
+            format
+        )

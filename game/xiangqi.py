@@ -1,5 +1,7 @@
 from enum import Enum
-from typing import List, Optional, Tuple
+from typing import List, Optional, Tuple, Dict, Any
+
+from utils.record_manager import RecordManager
 
 
 class PieceType(Enum):
@@ -49,6 +51,11 @@ class Piece:
     def get_color_name(self) -> str:
         return "红方" if self.color == PieceColor.RED else "黑方"
 
+    def copy(self) -> 'Piece':
+        new_piece = Piece(self.type, self.color)
+        new_piece.has_moved = self.has_moved
+        return new_piece
+
 
 class XiangqiGame:
     ROWS = 10
@@ -61,8 +68,11 @@ class XiangqiGame:
         self.winner: Optional[PieceColor] = None
         self.game_over: bool = False
         self.move_history: List[Tuple[Tuple[int, int], Tuple[int, int], Optional[Piece]]] = []
+        self.undo_stack: List[Dict[str, Any]] = []
         self.selected_pos: Optional[Tuple[int, int]] = None
         self.valid_moves: List[Tuple[int, int]] = []
+        self.is_in_check: bool = False
+        self.record_manager = RecordManager()
         self._init_board()
 
     def _init_board(self) -> None:
@@ -116,8 +126,39 @@ class XiangqiGame:
         self.winner = None
         self.game_over = False
         self.move_history.clear()
+        self.undo_stack.clear()
         self.selected_pos = None
         self.valid_moves = []
+        self.is_in_check = False
+
+    def can_undo(self) -> bool:
+        return len(self.move_history) > 0
+
+    def _save_state(self) -> None:
+        state = {
+            "board": [[piece.copy() if piece else None for piece in row] for row in self.board],
+            "current_player": self.current_player,
+            "winner": self.winner,
+            "game_over": self.game_over,
+            "is_in_check": self.is_in_check,
+        }
+        self.undo_stack.append(state)
+
+    def undo(self) -> bool:
+        if not self.can_undo() or not self.undo_stack:
+            return False
+
+        state = self.undo_stack.pop()
+        self.board = state["board"]
+        self.current_player = state["current_player"]
+        self.winner = state["winner"]
+        self.game_over = state["game_over"]
+        self.is_in_check = state["is_in_check"]
+        self.move_history.pop()
+        self.selected_pos = None
+        self.valid_moves = []
+
+        return True
 
     def is_valid_position(self, row: int, col: int) -> bool:
         return 0 <= row < self.ROWS and 0 <= col < self.COLS
@@ -292,22 +333,20 @@ class XiangqiGame:
         return moves
 
     def _is_move_legal(self, from_row: int, from_col: int, to_row: int, to_col: int, color: PieceColor) -> bool:
-        temp_board = [row[:] for row in self.board]
-        try:
-            moving_piece = temp_board[from_row][from_col]
-            temp_board[to_row][to_col] = moving_piece
-            temp_board[from_row][from_col] = None
+        temp_board = [[piece.copy() if piece else None for piece in row] for row in self.board]
 
-            if self._is_king_in_check(temp_board, color):
+        moving_piece = temp_board[from_row][from_col]
+        temp_board[to_row][to_col] = moving_piece
+        temp_board[from_row][from_col] = None
+
+        if self._is_king_in_check(temp_board, color):
+            return False
+
+        if moving_piece and moving_piece.type == PieceType.KING:
+            if self._is_king_facing_king(temp_board, color):
                 return False
 
-            if moving_piece and moving_piece.type == PieceType.KING:
-                if self._is_king_facing_king(temp_board, color):
-                    return False
-
-            return True
-        finally:
-            pass
+        return True
 
     def _find_king(self, board: List[List[Optional[Piece]]], color: PieceColor) -> Optional[Tuple[int, int]]:
         for row in range(self.ROWS):
@@ -467,6 +506,8 @@ class XiangqiGame:
 
         captured_piece = self.board[to_row][to_col]
 
+        self._save_state()
+
         self.move_history.append(((from_row, from_col), (to_row, to_col), captured_piece))
 
         self.board[to_row][to_col] = piece
@@ -477,8 +518,10 @@ class XiangqiGame:
             self.winner = self.current_player
             self.game_over = True
 
-        elif self._is_king_in_check(self.board, self._get_opponent_color()):
-            if not self._has_legal_moves(self._get_opponent_color()):
+        opponent_color = self._get_opponent_color()
+        self.is_in_check = self._is_king_in_check(self.board, opponent_color)
+        if self.is_in_check:
+            if not self._has_legal_moves(opponent_color):
                 self.winner = self.current_player
                 self.game_over = True
 
@@ -489,6 +532,22 @@ class XiangqiGame:
             self._switch_player()
 
         return True
+
+    def save_record(self, format: str = "json") -> Optional[str]:
+        if not self.move_history:
+            return None
+
+        winner_name = "平局"
+        if self.winner is not None:
+            winner_name = self.get_player_name(self.winner)
+
+        return self.record_manager.save_xiangqi_record(
+            self.move_history,
+            winner_name,
+            self.get_player_name(PieceColor.RED),
+            self.get_player_name(PieceColor.BLACK),
+            format
+        )
 
     def _get_opponent_color(self) -> PieceColor:
         return PieceColor.BLACK if self.current_player == PieceColor.RED else PieceColor.RED
